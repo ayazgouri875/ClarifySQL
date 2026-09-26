@@ -11,16 +11,34 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.database.session import init_app_database, SessionLocal, app_engine
+from app.database.session import get_db
 from app.database.models import Base, User, Organization, DatabaseConnection, QueryHistoryItem
+
+TEST_DB_URL = "sqlite:///database/test_app.db"
+test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+def override_get_db():
+    db = TestSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_db():
-    Base.metadata.drop_all(bind=app_engine)
-    init_app_database()
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+    yield
+    # Keep isolated
+
 
 
 def test_auth_signup_flow():
