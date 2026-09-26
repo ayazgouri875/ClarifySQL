@@ -27,3 +27,8 @@ htmlcov/
 
 # Logs
 *.log
+
+# Runtime SQLite app database (never commit production/runtime tenant data)
+database/app.db
+database/*.sqlite
+

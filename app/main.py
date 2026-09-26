@@ -6,12 +6,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routes import router as api_router
+from app.database.session import init_app_database
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="1.0.0",
-    description="Ambiguity-Aware Natural Language to SQL System with Clarification Engine and Safe Execution"
+    version="2.0.0",
+    description="Multi-Tenant Ambiguity-Aware Natural Language to SQL SaaS with Clarification Engine"
 )
+
+@app.on_event("startup")
+def on_startup():
+    init_app_database()
 
 # Enable CORS for local Streamlit and web frontends
 app.add_middleware(

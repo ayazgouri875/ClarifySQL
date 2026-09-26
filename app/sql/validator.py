@@ -27,7 +27,11 @@ class SQLValidator:
     def __init__(self):
         self.valid_tables: Set[str] = set(get_table_names())
 
-    def validate_and_sanitize(self, sql: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    def validate_and_sanitize(
+        self,
+        sql: str,
+        allowed_tables: Optional[Set[str]] = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Validates SQL against safety rules.
         Returns:
@@ -61,10 +65,11 @@ class SQLValidator:
             if token in FORBIDDEN_KEYWORDS:
                 return False, None, f"Forbidden keyword detected in query: '{token}'."
 
-        # 4. Table whitelisting check
+        # 4. Table whitelisting check against dynamic or default tables
+        active_tables = {t.lower() for t in allowed_tables} if allowed_tables else self.valid_tables
         extracted_tables = self._extract_tables(clean_sql)
         for table in extracted_tables:
-            if table.lower() not in self.valid_tables:
+            if table.lower() not in active_tables:
                 return False, None, f"Unknown or unauthorized table referenced: '{table}'."
 
         # 5. Result row limit safety enforcement

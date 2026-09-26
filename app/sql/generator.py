@@ -10,25 +10,46 @@ from app.llm.prompts import SQL_GENERATION_PROMPT
 from app.database.metadata import get_compact_schema_prompt
 from app.core.config import settings
 
+def format_dynamic_schema(schema_dict: Dict[str, Any]) -> str:
+    """Formats an introspected tenant schema into a schema prompt representation."""
+    lines = ["DATABASE SCHEMA (Relational Tables & Columns):"]
+    for table_name, meta in schema_dict.get("tables", {}).items():
+        cols = []
+        for col_name, col_info in meta.get("columns", {}).items():
+            type_str = col_info.get("type", "TEXT") if isinstance(col_info, dict) else str(col_info)
+            cols.append(f"{col_name} ({type_str})")
+        lines.append(f"\nTABLE {table_name}:")
+        if meta.get("description"):
+            lines.append(f"  Description: {meta['description']}")
+        lines.append(f"  Columns: {', '.join(cols)}")
+        if meta.get("foreign_keys"):
+            fk_strs = [f"{fk['column']} -> {fk['references_table']}.{fk['references_column']}" for fk in meta["foreign_keys"]]
+            lines.append(f"  Foreign Keys: {', '.join(fk_strs)}")
+    return "\n".join(lines)
+
 class SQLGenerator:
     def __init__(self):
         self.llm = llm_client
-        self.schema_prompt = get_compact_schema_prompt()
+        self.default_schema_prompt = get_compact_schema_prompt()
 
     def generate(
         self,
         question: str,
         resolved_specification: Optional[str] = None,
-        resolved_context: Optional[Dict[str, Any]] = None
+        resolved_context: Optional[Dict[str, Any]] = None,
+        dynamic_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generates SQL from question and resolved specification.
         Uses Gemini LLM if configured; otherwise uses robust semantic mapping.
+        Supports tenant-specific dynamic schemas.
         """
+        schema_text = format_dynamic_schema(dynamic_schema) if dynamic_schema else self.default_schema_prompt
+
         # 1. Try Gemini LLM if configured
         if self.llm.model:
             prompt = SQL_GENERATION_PROMPT.format(
-                schema=self.schema_prompt,
+                schema=schema_text,
                 question=question,
                 resolved_specification=resolved_specification or "None (direct query)",
                 current_date=settings.CURRENT_DATE
@@ -41,25 +62,43 @@ class SQLGenerator:
                 return clean
 
         # 2. Semantic Fallback Engine for reliable local execution & unit testing
-        return self._semantic_generate(question, resolved_specification, resolved_context)
+        return self._semantic_generate(question, resolved_specification, resolved_context, dynamic_schema)
 
     def _semantic_generate(
         self,
         question: str,
         resolved_specification: Optional[str] = None,
-        resolved_context: Optional[Dict[str, Any]] = None
+        resolved_context: Optional[Dict[str, Any]] = None,
+        dynamic_schema: Optional[Dict[str, Any]] = None
     ) -> str:
         q_lower = question.lower()
         context = resolved_context or {}
         metric = context.get("metric", "")
         time_filter = context.get("time_filter", "")
 
+        # Dynamic table & column resolution if tenant schema is provided
+        tables = set(dynamic_schema["tables"].keys()) if dynamic_schema and "tables" in dynamic_schema else set()
+
+        cust_tbl = "customers"
+        if tables:
+            for cand in ["customers", "clients", "client_master", "users", "accounts"]:
+                if cand in tables:
+                    cust_tbl = cand
+                    break
+
+        orders_tbl = "orders"
+        if tables:
+            for cand in ["orders", "sales_transactions", "sales", "invoices", "purchases"]:
+                if cand in tables:
+                    orders_tbl = cand
+                    break
+
         # A. Clarified "best customers"
         if "best customer" in q_lower or "top customer" in q_lower:
             if metric == "total_spending" or (resolved_specification and "spending" in resolved_specification.lower()):
-                return """SELECT c.customer_id, c.customer_name, SUM(o.total_amount) AS total_spending, COUNT(o.order_id) AS total_orders
-FROM customers c
-JOIN orders o ON c.customer_id = o.customer_id
+                return f"""SELECT c.customer_id, c.customer_name, SUM(o.total_amount) AS total_spending, COUNT(o.order_id) AS total_orders
+FROM {cust_tbl} c
+JOIN {orders_tbl} o ON c.customer_id = o.customer_id
 WHERE o.order_date >= '2026-08-01' AND o.order_date <= '2026-08-31'
 GROUP BY c.customer_id, c.customer_name
 ORDER BY total_spending DESC

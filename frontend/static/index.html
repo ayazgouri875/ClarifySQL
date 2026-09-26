@@ -3,54 +3,206 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QueryMind - Database Query Assistant</title>
-  <meta name="description" content="Ambiguity-aware Natural Language to SQL system with automated clarification engine and safe execution.">
+  <title>QueryMind - Enterprise Multi-Tenant SQL Intelligence Platform</title>
+  <meta name="description" content="Secure multi-tenant Natural Language to SQL system with intelligent clarification, tenant isolation, and read-only execution.">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-  <div class="app-shell">
+  <!-- AUTHENTICATION OVERLAY (Shown when unauthenticated) -->
+  <div id="authOverlay" class="auth-overlay" style="display: none;">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-title" style="font-size: 20px;">QueryMind</div>
+        <div class="brand-subtitle" style="font-size: 12px; margin-top: 3px;">Enterprise SQL Intelligence Platform</div>
+      </div>
+
+      <!-- Auth Tab Switcher -->
+      <div class="auth-tabs">
+        <button id="tabLogin" class="auth-tab active" type="button">Sign In</button>
+        <button id="tabSignup" class="auth-tab" type="button">Create Workspace</button>
+      </div>
+
+      <!-- Auth Error Container -->
+      <div id="authAlert" class="status-badge badge-error" style="display: none; width: 100%; padding: 10px; margin-bottom: 16px; border-radius: var(--radius-sm); font-size: 12px;"></div>
+
+      <!-- Sign In Form -->
+      <form id="formLogin" class="auth-form">
+        <div class="form-group">
+          <label class="form-label" for="loginEmail">Work Email</label>
+          <input type="email" id="loginEmail" class="query-input" placeholder="name@company.com" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" class="query-input" placeholder="Enter password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" id="btnLoginSubmit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
+          Sign In to Workspace
+        </button>
+      </form>
+
+      <!-- Sign Up Form (Create Workspace) -->
+      <form id="formSignup" class="auth-form" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="signupName">Full Name</label>
+          <input type="text" id="signupName" class="query-input" placeholder="Ayaz Gouri" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signupEmail">Work Email</label>
+          <input type="email" id="signupEmail" class="query-input" placeholder="ayaz@example.com" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signupOrg">Organization / Company Name</label>
+          <input type="text" id="signupOrg" class="query-input" placeholder="Acme Technologies" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" class="query-input" placeholder="Minimum 8 characters" minlength="8" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signupConfirmPassword">Confirm Password</label>
+          <input type="password" id="signupConfirmPassword" class="query-input" placeholder="Repeat password" minlength="8" required />
+        </div>
+        <button type="submit" id="btnSignupSubmit" class="btn btn-primary" style="width: 100%; margin-top: 6px;">
+          Create Workspace &amp; Account
+        </button>
+      </form>
+
+      <div class="auth-footer-notice">
+        <span>Protected by enterprise multi-tenant isolation, PBKDF2 hashing, and AES-256-GCM credential encryption.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP SHELL -->
+  <div class="app-shell" id="appShell">
     <!-- Sidebar Navigation -->
     <aside class="app-sidebar">
       <div class="sidebar-header">
         <div class="brand-title">QueryMind</div>
-        <div class="brand-subtitle">Database Query Assistant</div>
+        <div class="brand-subtitle" id="sidebarOrgName">Enterprise Workspace</div>
       </div>
       
       <nav class="sidebar-nav">
-        <button class="nav-item active" data-view="query" id="navQuery">
+        <button class="nav-item active" data-view="dashboard" id="navDashboard">
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="query" id="navQuery">
           Query Workspace
         </button>
-        <button class="nav-item" data-view="history" id="navHistory">
-          Query History
+        <button class="nav-item" data-view="connections" id="navConnections">
+          Database Connections
         </button>
         <button class="nav-item" data-view="schema" id="navSchema">
           Schema Catalog
         </button>
-        <button class="nav-item" data-view="benchmark" id="navBenchmark">
-          Benchmark & Evaluation
+        <button class="nav-item" data-view="history" id="navHistory">
+          Query History
+        </button>
+        <button class="nav-item" data-view="settings" id="navSettings">
+          Organization Settings
         </button>
       </nav>
       
       <div class="sidebar-footer">
-        <div><span class="status-indicator"></span>Connected: Read-Only</div>
-        <div style="font-family: var(--font-mono); font-size: 11px; margin-top: 4px;" id="sidebarEngine">company_db</div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <span class="status-indicator" id="sidebarStatusDot"></span>
+          <span id="sidebarConnName" style="font-weight: 500;">No Connection</span>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);" id="sidebarEngine">SELECT-Only Engine</div>
       </div>
     </aside>
 
     <!-- Main Workspace -->
     <main class="app-main">
       <header class="topbar">
-        <div class="topbar-title" id="pageHeading">Query Workspace</div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div class="topbar-title" id="pageHeading">Dashboard</div>
+        </div>
+
         <div class="topbar-meta">
-          <span>Engine: <span class="meta-pill" id="topbarEngine">SQLite (Read-Only)</span></span>
-          <span>Catalog: <span class="meta-pill" id="topbarTables">10 Tables</span></span>
-          <span>Environment: <span class="meta-pill">Production Simulation</span></span>
+          <!-- Active Connection Selector -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label for="topbarConnSelect" style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">Active DB:</label>
+            <select id="topbarConnSelect" class="connection-select">
+              <option value="">-- No Connected Database --</option>
+            </select>
+          </div>
+
+          <span class="meta-pill" id="topbarOrgBadge">Organization</span>
+          <span class="meta-pill" id="topbarUserBadge">User (Role)</span>
+          <button id="btnLogout" class="btn btn-secondary btn-sm" type="button">Sign Out</button>
         </div>
       </header>
 
       <div class="workspace-content">
-        <!-- VIEW 1: QUERY WORKSPACE -->
-        <section class="view-panel active" id="view-query">
+        <!-- Global Notification Banner -->
+        <div id="globalAlert" class="status-badge" style="display: none; padding: 10px 14px; margin-bottom: 18px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;"></div>
+
+        <!-- VIEW 1: DASHBOARD -->
+        <section class="view-panel active" id="view-dashboard">
+          <!-- Real Metrics Grid -->
+          <div class="dashboard-metrics-grid">
+            <div class="metric-card">
+              <div class="metric-label">Connected Databases</div>
+              <div class="metric-value" id="metricConnCount">0</div>
+              <div class="metric-sub" id="metricConnSub">PostgreSQL &amp; MySQL</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Organization Queries</div>
+              <div class="metric-value" id="metricQueryCount">0</div>
+              <div class="metric-sub">Executed &amp; Audited</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Active Connection</div>
+              <div class="metric-value" id="metricActiveStatus" style="font-size: 16px; font-family: var(--font-sans);">None</div>
+              <div class="metric-sub" id="metricActiveEngine">Awaiting selection</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Security &amp; Isolation</div>
+              <div class="metric-value" style="font-size: 16px; color: #166534; font-family: var(--font-sans);">Enforced</div>
+              <div class="metric-sub">AES-256-GCM &amp; Read-Only</div>
+            </div>
+          </div>
+
+          <!-- Empty State (if no connections exist) -->
+          <div id="dashboardEmptyNotice" class="section-panel" style="display: none;">
+            <div class="panel-body" style="text-align: center; padding: 36px 20px;">
+              <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Connect your database to start querying your organization's data</h3>
+              <p style="font-size: 13px; color: var(--text-muted); max-width: 540px; margin: 0 auto 18px;">
+                QueryMind runs directly against your existing PostgreSQL, MySQL, or relational databases with zero administrative requirements and complete tenant isolation.
+              </p>
+              <button id="btnGoToConnections" class="btn btn-primary">
+                + Add Database Connection
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Queries Activity Section -->
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Recent Query Activity</span>
+              <button id="btnDashboardNewQuery" class="btn btn-secondary btn-sm">New Query</button>
+            </div>
+            <div class="panel-body">
+              <div id="dashboardRecentList" class="history-list">
+                <div style="color: var(--text-muted); font-size: 13px;">No queries executed in your workspace yet.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: QUERY WORKSPACE -->
+        <section class="view-panel" id="view-query">
+          <!-- Active Connection Notice Bar -->
+          <div id="queryConnNotice" class="interpretation-callout" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div>
+              <span style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Active Target:</span>
+              <span id="queryTargetName" style="font-weight: 600; margin-left: 6px; color: var(--text-primary);">No Connection Selected</span>
+              <span id="queryTargetEngine" class="meta-pill" style="margin-left: 8px;">SQLite / Default</span>
+            </div>
+            <button id="btnSwitchConnFromQuery" class="btn btn-secondary btn-sm">Manage Connections</button>
+          </div>
+
           <div class="section-panel">
             <div class="panel-header">
               <span class="panel-title">Natural Language Query</span>
@@ -62,7 +214,7 @@
                   type="text" 
                   id="queryInput" 
                   class="query-input" 
-                  placeholder="Ask a business question in plain English (e.g., 'Show me the best customers last month')"
+                  placeholder="Ask a question in plain English (e.g., 'How many customers signed up last month?')"
                   autocomplete="off"
                 />
                 <button id="btnExecute" class="btn btn-primary">
@@ -74,12 +226,10 @@
               <div class="sample-strip">
                 <span class="sample-label">Examples:</span>
                 <button class="sample-chip" data-query="How many customers signed up last month?">Customer signups last month</button>
-                <button class="sample-chip" data-query="Show customers from Mumbai">Customers from Mumbai</button>
-                <button class="sample-chip" data-query="Which customers have never placed an order?">Never placed an order</button>
                 <button class="sample-chip" data-query="Show revenue by product category">Revenue by product category</button>
+                <button class="sample-chip" data-query="Which customers have never placed an order?">Never placed an order</button>
                 <button class="sample-chip ambiguous" data-query="Show me the best customers last month">Best customers last month [Ambiguous]</button>
                 <button class="sample-chip ambiguous" data-query="Which products are performing well?">Top performing products [Ambiguous]</button>
-                <button class="sample-chip ambiguous" data-query="Show recent orders">Recent orders [Ambiguous]</button>
               </div>
             </div>
           </div>
@@ -101,7 +251,7 @@
             </div>
 
             <button id="btnConfirmClarification" class="btn btn-primary">
-              Confirm & Execute Query
+              Confirm &amp; Execute Query
             </button>
           </div>
 
@@ -129,7 +279,7 @@
               </div>
               <div class="code-container" style="margin-bottom: 0;">
                 <div class="code-header">
-                  <span>POSTGRESQL / SQLITE STANDARD</span>
+                  <span id="sqlDialectLabel">POSTGRESQL / SQLITE STANDARD</span>
                   <span id="queryExecTime">-- ms</span>
                 </div>
                 <div class="code-block" id="sqlDisplay"></div>
@@ -148,7 +298,7 @@
               <div class="panel-body" style="padding-top: 14px;">
                 <div class="table-meta-bar">
                   <span class="table-stats" id="tableStats">0 rows returned</span>
-                  <span class="table-stats">Read-Only Transaction</span>
+                  <span class="table-stats" id="tableLimitNotice" style="color: var(--text-muted); font-size: 12px;">Enforcing Read-Only Limit (Max 1,000)</span>
                 </div>
                 <div class="table-wrapper">
                   <table class="data-table" id="dataTable">
@@ -173,71 +323,193 @@
           </div>
         </section>
 
-        <!-- VIEW 2: QUERY HISTORY -->
-        <section class="view-panel" id="view-history">
-          <div class="section-panel">
+        <!-- VIEW 3: DATABASE CONNECTIONS -->
+        <section class="view-panel" id="view-connections">
+          <!-- Information & Security Banner -->
+          <div class="interpretation-callout" style="margin-bottom: 20px; line-height: 1.5;">
+            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 3px;">
+              Connect your organization's database
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary);">
+              Use a <strong>read-only</strong> database user account whenever possible. Credentials are encrypted at rest with AES-256-GCM. Passwords are never returned over the API or exposed in the UI.
+            </div>
+          </div>
+
+          <!-- Action bar -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">Configured Database Connections</div>
+            <button id="btnToggleAddConn" class="btn btn-primary btn-sm">+ Add New Connection</button>
+          </div>
+
+          <!-- Add Connection Form Panel (Collapsible) -->
+          <div id="connFormPanel" class="section-panel" style="display: none;">
             <div class="panel-header">
-              <span class="panel-title">Session Query Audit Log</span>
-              <button id="btnClearHistory" class="btn btn-secondary btn-sm">Clear History</button>
+              <span class="panel-title">Add Database Connection</span>
+              <button id="btnCloseConnForm" class="btn btn-secondary btn-sm">&times; Cancel</button>
             </div>
             <div class="panel-body">
-              <div class="history-list" id="historyList">
-                <div style="color: var(--text-muted); font-size: 13px;">No queries executed in this session yet.</div>
-              </div>
+              <form id="formAddConnection">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                  <div class="form-group">
+                    <label class="form-label" for="connName">Connection Name</label>
+                    <input type="text" id="connName" class="query-input" placeholder="e.g., Production Database" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="connType">Database Engine</label>
+                    <select id="connType" class="query-input" style="height: 38px;">
+                      <option value="postgresql">PostgreSQL</option>
+                      <option value="mysql">MySQL</option>
+                      <option value="sqlite">SQLite (Local File / Test)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px;">
+                  <div class="form-group">
+                    <label class="form-label" for="connHost">Host / File Path</label>
+                    <input type="text" id="connHost" class="query-input" placeholder="e.g., db.company.com or /path/to/db.sqlite" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="connPort">Port</label>
+                    <input type="number" id="connPort" class="query-input" placeholder="5432" value="5432" />
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                  <div class="form-group">
+                    <label class="form-label" for="connDbName">Database Name</label>
+                    <input type="text" id="connDbName" class="query-input" placeholder="e.g., company_db" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="connUsername">Username</label>
+                    <input type="text" id="connUsername" class="query-input" placeholder="e.g., readonly_user" required />
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                  <div class="form-group">
+                    <label class="form-label" for="connPassword">Password</label>
+                    <input type="password" id="connPassword" class="query-input" placeholder="Database password" autocomplete="new-password" />
+                  </div>
+                  <div class="form-group" style="display: flex; align-items: center; padding-top: 24px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                      <input type="checkbox" id="connSsl" checked />
+                      <span>Require SSL Encryption</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Test Result Alert -->
+                <div id="connTestAlert" class="status-badge" style="display: none; padding: 10px; margin-bottom: 14px; width: 100%; font-size: 12px; border-radius: var(--radius-sm);"></div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                  <button type="button" id="btnTestConnInput" class="btn btn-secondary">
+                    Test Connection
+                  </button>
+                  <button type="submit" id="btnSaveConnSubmit" class="btn btn-primary">
+                    Save Connection
+                  </button>
+                </div>
+              </form>
             </div>
+          </div>
+
+          <!-- Saved Connections Cards Container -->
+          <div id="savedConnectionsList" class="connections-grid">
+            <div style="color: var(--text-muted); font-size: 13px;">Loading configured connections...</div>
           </div>
         </section>
 
-        <!-- VIEW 3: SCHEMA CATALOG -->
+        <!-- VIEW 4: SCHEMA CATALOG -->
         <section class="view-panel" id="view-schema">
           <div class="section-panel">
             <div class="panel-header">
-              <span class="panel-title">Relational Database Catalog (10 Tables)</span>
-              <span class="status-badge badge-success">Schema Synchronized</span>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="panel-title">Relational Schema Catalog</span>
+                <span id="schemaTableCountBadge" class="status-badge badge-success">0 Tables</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button id="btnRefreshSchema" class="btn btn-secondary btn-sm">Refresh from Database</button>
+              </div>
             </div>
             <div class="panel-body">
               <div class="schema-grid">
                 <div class="table-list" id="schemaTableList">
-                  <!-- Populated dynamically -->
+                  <div style="padding: 12px; font-size: 12px; color: var(--text-muted);">Select or connect a database to inspect its schema.</div>
                 </div>
                 <div class="schema-details" id="schemaDetails">
-                  <div style="color: var(--text-muted); font-size: 13px;">Select a table on the left to inspect columns, constraints, and foreign key definitions.</div>
+                  <div style="color: var(--text-muted); font-size: 13px;">Select a table on the left to inspect its columns, constraints, and foreign key relationships.</div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- VIEW 4: BENCHMARK & EVALUATION -->
-        <section class="view-panel" id="view-benchmark">
+        <!-- VIEW 5: QUERY HISTORY -->
+        <section class="view-panel" id="view-history">
           <div class="section-panel">
             <div class="panel-header">
-              <span class="panel-title">Automated Benchmark Test Suite</span>
-              <button id="btnRunBenchmark" class="btn btn-primary btn-sm">Execute Benchmark</button>
+              <span class="panel-title">Organization Query Audit Log</span>
+              <button id="btnRefreshHistory" class="btn btn-secondary btn-sm">Refresh Log</button>
             </div>
             <div class="panel-body">
-              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-                Evaluates query classification, ambiguity detection accuracy, intent resolution, and SQL execution across standard operational query categories.
-              </p>
-              <div id="benchmarkLoading" class="loading-inline" style="display: none;">
-                <div class="spinner"></div>
-                <span>Executing benchmark test suite...</span>
+              <div class="history-list" id="historyList">
+                <div style="color: var(--text-muted); font-size: 13px;">No queries executed in your organization yet.</div>
               </div>
-              <div class="table-wrapper">
-                <table class="benchmark-table" id="benchmarkTable">
-                  <thead>
-                    <tr>
-                      <th>Query Category</th>
-                      <th class="text-right">Evaluated</th>
-                      <th class="text-right">Passed</th>
-                      <th class="text-right">Accuracy</th>
-                    </tr>
-                  </thead>
-                  <tbody id="benchmarkBody">
-                    <tr><td colspan="4" style="color: var(--text-muted);">Click "Execute Benchmark" to run the test suite.</td></tr>
-                  </tbody>
-                </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: ORGANIZATION SETTINGS -->
+        <section class="view-panel" id="view-settings">
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Organization Workspace</span>
+            </div>
+            <div class="panel-body">
+              <form id="formUpdateOrg" style="max-width: 500px; margin-bottom: 24px;">
+                <div class="form-group">
+                  <label class="form-label" for="settingsOrgName">Organization Name</label>
+                  <input type="text" id="settingsOrgName" class="query-input" required />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Organization ID</label>
+                  <input type="text" id="settingsOrgId" class="query-input" readonly style="background-color: var(--bg-subtle); font-family: var(--font-mono); font-size: 12px;" />
+                </div>
+                <button type="submit" id="btnSaveOrgName" class="btn btn-primary btn-sm">Save Changes</button>
+              </form>
+
+              <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 24px 0;" />
+
+              <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Current User Profile</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 600px; font-size: 13px;">
+                <div>
+                  <span style="color: var(--text-muted);">Name:</span>
+                  <span id="settingsUserName" style="font-weight: 500; margin-left: 6px;">--</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Role:</span>
+                  <span id="settingsUserRole" class="meta-pill" style="margin-left: 6px;">--</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Email:</span>
+                  <span id="settingsUserEmail" style="font-family: var(--font-mono); margin-left: 6px;">--</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Member Since:</span>
+                  <span id="settingsOrgCreated" style="margin-left: 6px;">--</span>
+                </div>
               </div>
+
+              <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 24px 0;" />
+
+              <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Security Architecture</div>
+              <ul style="font-size: 13px; color: var(--text-secondary); line-height: 1.7; padding-left: 18px;">
+                <li>Tenant Isolation: Each query is strictly scoped to <code>authenticated_user.organization_id</code>.</li>
+                <li>Credential Security: Database passwords encrypted at rest via AES-256-GCM authenticated cipher.</li>
+                <li>Network Protection: SSRF prevention filters block private IP ranges and internal metadata endpoints.</li>
+                <li>Read-Only Execution: Strictly enforces single-statement <code>SELECT</code> queries with automatic row limiting.</li>
+              </ul>
             </div>
           </div>
         </section>
