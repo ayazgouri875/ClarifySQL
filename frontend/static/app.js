@@ -687,9 +687,15 @@
     if (!question) return;
 
     const active = getActiveConnection();
+    if (!active) {
+      renderError("No database connected. Please click 'Database Connections' in the sidebar or 'Manage Connections' above to connect your company database.");
+      return;
+    }
+
     state.currentQuestion = question;
     resetQueryUI();
     showLoading(true, 'Analyzing query intent and inspecting schema...');
+
 
     try {
       const res = await authFetch('/api/v1/query', {

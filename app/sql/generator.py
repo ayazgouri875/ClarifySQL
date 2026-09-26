@@ -79,6 +79,7 @@ class SQLGenerator:
         # Dynamic table & column resolution if tenant schema is provided
         tables = set(dynamic_schema["tables"].keys()) if dynamic_schema and "tables" in dynamic_schema else set()
 
+
         cust_tbl = "customers"
         if tables:
             for cand in ["customers", "clients", "client_master", "users", "accounts"]:
@@ -92,6 +93,7 @@ class SQLGenerator:
                 if cand in tables:
                     orders_tbl = cand
                     break
+
 
         # A. Clarified "best customers"
         if "best customer" in q_lower or "top customer" in q_lower:
@@ -190,10 +192,17 @@ ORDER BY total_sales DESC;"""
                 return """SELECT SUM(total_amount) AS total_sales, COUNT(order_id) AS total_orders, ROUND(AVG(total_amount), 2) AS avg_order_val
 FROM orders;"""
 
-        # E. Direct Queries
+        # E. Dynamic Schema Queries (for custom customer databases)
+        if dynamic_schema and "tables" in dynamic_schema and dynamic_schema["tables"]:
+            dyn_sql = self._generate_from_dynamic_schema(question, dynamic_schema, resolved_specification, resolved_context)
+            if dyn_sql:
+                return dyn_sql
+
+        # F. Direct Standard Queries
         # 1. Customer signups last month
         if "how many customers signed up" in q_lower or ("signup" in q_lower and "last month" in q_lower):
             return """SELECT COUNT(*) AS customer_count
+
 FROM customers
 WHERE signup_date >= '2026-08-01' AND signup_date <= '2026-08-31';"""
 
@@ -249,7 +258,114 @@ GROUP BY c.city
 ORDER BY total_revenue DESC
 LIMIT 5;"""
 
-        # Generic fallback
-        return """SELECT customer_id, customer_name, city, segment, signup_date FROM customers LIMIT 10;"""
+    def _generate_from_dynamic_schema(
+        self,
+        question: str,
+        dynamic_schema: Dict[str, Any],
+        resolved_specification: Optional[str] = None,
+        resolved_context: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """
+        Dynamically grounds natural language questions to any introspected tenant database schema.
+        Maps keywords to actual table names, column names, and filters.
+        """
+        q_lower = question.lower()
+        tables = dynamic_schema.get("tables", {})
+        if not tables:
+            return None
+
+        # 1. Identify which table is referenced in the question
+        target_table = None
+        best_score = 0
+
+        for tname, tmeta in tables.items():
+            t_clean = tname.lower().replace("_", " ")
+            words = [t_clean, t_clean[:-1] if t_clean.endswith('s') else t_clean]
+            for w in words:
+                if len(w) > 3 and w in q_lower:
+                    score = len(w)
+                    if score > best_score:
+                        best_score = score
+                        target_table = tname
+
+        # Semantic aliases for business concepts
+        if not target_table:
+            aliases = {
+                "client": ["clients", "customers", "users"],
+                "customer": ["customers", "clients", "users"],
+                "user": ["users", "clients", "customers"],
+                "invoice": ["invoices", "orders", "payments"],
+                "order": ["orders", "invoices", "sales"],
+                "subscription": ["subscriptions", "plans"],
+                "ticket": ["support_tickets", "tickets", "issues"],
+                "product": ["products_catalog", "products", "items"],
+                "item": ["products_catalog", "products", "order_items"]
+            }
+            for kw, candidate_tables in aliases.items():
+                if kw in q_lower:
+                    for cand in candidate_tables:
+                        if cand in tables:
+                            target_table = cand
+                            break
+                    if target_table:
+                        break
+
+        if not target_table:
+            return None
+
+        tbl_meta = tables[target_table]
+        columns = list(tbl_meta.get("columns", {}).keys())
+
+        # 2. Check for filters based on keywords in question
+        where_clauses = []
+        countries = ["india", "usa", "spain", "france", "germany", "uk", "singapore", "japan"]
+        cities = ["mumbai", "london", "paris", "berlin", "madrid", "tokyo", "bengaluru", "san francisco"]
+
+        for col in columns:
+            col_l = col.lower()
+            if col_l in ("country", "billing_country"):
+                for loc in countries:
+                    if re.search(rf"\b{loc}\b", q_lower):
+                        where_clauses.append(f"LOWER({col}) = '{loc}'")
+            elif col_l == "city":
+                for loc in cities:
+                    if re.search(rf"\b{loc}\b", q_lower):
+                        where_clauses.append(f"LOWER({col}) = '{loc}'")
+            elif col_l in ("plan_tier", "plan_name"):
+                for plan in ["enterprise", "professional", "starter"]:
+                    if re.search(rf"\b{plan}\b", q_lower):
+                        where_clauses.append(f"LOWER({col}) = '{plan}'")
+            elif col_l in ("status", "payment_status"):
+                for st_val in ["active", "paid", "pending", "resolved", "cancelled", "open"]:
+                    if re.search(rf"\b{st_val}\b", q_lower):
+                        where_clauses.append(f"LOWER({col}) = '{st_val}'")
+
+        date_cols = [c for c in columns if "date" in c.lower() or "created" in c.lower() or "started" in c.lower()]
+        if ("last month" in q_lower or "previous month" in q_lower) and date_cols:
+            d_col = date_cols[0]
+            where_clauses.append(f"{d_col} >= '2026-08-01' AND {d_col} <= '2026-08-31'")
+
+        where_str = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        # 3. Determine query shape (COUNT, SUM, TOP, or SELECT)
+        # Use regex so 'account' is not matched by 'count'
+        is_count = bool(re.search(r"\b(how many|count|number of|total count)\b", q_lower))
+        if is_count:
+            return f"SELECT COUNT(*) AS total_count FROM {target_table}{where_str};"
+
+        is_sum = bool(re.search(r"\b(total amount|total revenue|sum of|total spent)\b", q_lower))
+        num_cols = [c for c in columns if any(k in c.lower() for k in ["amount", "balance", "price", "fee", "cost", "total"])]
+        if is_sum and num_cols:
+            return f"SELECT SUM({num_cols[0]}) AS total_sum FROM {target_table}{where_str};"
+
+        is_top = bool(re.search(r"\b(top|best|highest|most)\b", q_lower))
+        if is_top and num_cols:
+            select_cols = ", ".join(columns[:6]) if len(columns) > 6 else "*"
+            return f"SELECT {select_cols} FROM {target_table}{where_str} ORDER BY {num_cols[0]} DESC LIMIT 10;"
+
+
+        select_cols = ", ".join(columns[:8]) if len(columns) > 8 else "*"
+        return f"SELECT {select_cols} FROM {target_table}{where_str} LIMIT 20;"
 
 sql_generator = SQLGenerator()
+

@@ -63,6 +63,22 @@ def execute_nl_query(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Database connection not found or does not belong to your organization."
             )
+    elif current_user:
+        # Check if tenant has any saved database connection
+        user_conns = db.query(DatabaseConnection).filter(
+            DatabaseConnection.organization_id == current_user.organization_id
+        ).order_by(DatabaseConnection.created_at.desc()).all()
+        if user_conns:
+            target_connection = user_conns[0]
+        else:
+            import uuid
+            return QueryResponse(
+                status="error",
+                session_id=request.session_id or str(uuid.uuid4()),
+                question=request.question,
+                error_message="No database connected. Please click 'Database Connections' in the sidebar to connect your company database."
+            )
+
 
     response = query_service.process_query(
         request=request,
