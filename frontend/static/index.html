@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueryMind - Database Query Assistant</title>
+  <meta name="description" content="Ambiguity-aware Natural Language to SQL system with automated clarification engine and safe execution.">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar">
+      <div class="sidebar-header">
+        <div class="brand-title">QueryMind</div>
+        <div class="brand-subtitle">Database Query Assistant</div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="query" id="navQuery">
+          Query Workspace
+        </button>
+        <button class="nav-item" data-view="history" id="navHistory">
+          Query History
+        </button>
+        <button class="nav-item" data-view="schema" id="navSchema">
+          Schema Catalog
+        </button>
+        <button class="nav-item" data-view="benchmark" id="navBenchmark">
+          Benchmark & Evaluation
+        </button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div><span class="status-indicator"></span>Connected: Read-Only</div>
+        <div style="font-family: var(--font-mono); font-size: 11px; margin-top: 4px;" id="sidebarEngine">company_db</div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="app-main">
+      <header class="topbar">
+        <div class="topbar-title" id="pageHeading">Query Workspace</div>
+        <div class="topbar-meta">
+          <span>Engine: <span class="meta-pill" id="topbarEngine">SQLite (Read-Only)</span></span>
+          <span>Catalog: <span class="meta-pill" id="topbarTables">10 Tables</span></span>
+          <span>Environment: <span class="meta-pill">Production Simulation</span></span>
+        </div>
+      </header>
+
+      <div class="workspace-content">
+        <!-- VIEW 1: QUERY WORKSPACE -->
+        <section class="view-panel active" id="view-query">
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Natural Language Query</span>
+              <span id="workflowBadge" class="status-badge" style="display: none;">Ready</span>
+            </div>
+            <div class="panel-body">
+              <div class="query-box-container">
+                <input 
+                  type="text" 
+                  id="queryInput" 
+                  class="query-input" 
+                  placeholder="Ask a business question in plain English (e.g., 'Show me the best customers last month')"
+                  autocomplete="off"
+                />
+                <button id="btnExecute" class="btn btn-primary">
+                  Execute Query
+                </button>
+              </div>
+
+              <!-- Sample Query Prompts -->
+              <div class="sample-strip">
+                <span class="sample-label">Examples:</span>
+                <button class="sample-chip" data-query="How many customers signed up last month?">Customer signups last month</button>
+                <button class="sample-chip" data-query="Show customers from Mumbai">Customers from Mumbai</button>
+                <button class="sample-chip" data-query="Which customers have never placed an order?">Never placed an order</button>
+                <button class="sample-chip" data-query="Show revenue by product category">Revenue by product category</button>
+                <button class="sample-chip ambiguous" data-query="Show me the best customers last month">Best customers last month [Ambiguous]</button>
+                <button class="sample-chip ambiguous" data-query="Which products are performing well?">Top performing products [Ambiguous]</button>
+                <button class="sample-chip ambiguous" data-query="Show recent orders">Recent orders [Ambiguous]</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loading Indicator -->
+          <div id="loadingState" class="loading-inline" style="display: none;">
+            <div class="spinner"></div>
+            <span id="loadingMessage">Analyzing natural language query and verifying intent...</span>
+          </div>
+
+          <!-- Clarification Container (Shown only when ambiguity is detected) -->
+          <div id="clarificationContainer" class="clarification-panel" style="display: none;">
+            <div class="clarification-tag">Clarification Required</div>
+            <div class="clarification-title" id="clarificationQuestion">How should customers be ranked?</div>
+            <div class="clarification-reason" id="clarificationReason">The term "best customers" can be interpreted in multiple ways.</div>
+            
+            <div class="clarification-options" id="clarificationOptions">
+              <!-- Dynamically populated radio options -->
+            </div>
+
+            <button id="btnConfirmClarification" class="btn btn-primary">
+              Confirm & Execute Query
+            </button>
+          </div>
+
+          <!-- Results Section (Shown upon successful execution) -->
+          <div id="resultsContainer" style="display: none;">
+            <!-- Interpretation Banner -->
+            <div id="interpretationBox" class="interpretation-callout" style="display: none;">
+              <div class="interpretation-label">Resolved Interpretation</div>
+              <div id="interpretationText">Top customers ranked by total spending during the previous calendar month.</div>
+            </div>
+
+            <!-- Natural Language Summary -->
+            <div class="summary-callout" id="summaryCallout">
+              <!-- Executive Summary -->
+            </div>
+
+            <!-- Validated SQL Area -->
+            <div class="section-panel">
+              <div class="panel-header">
+                <span class="panel-title">Validated SQL Query</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <span class="status-badge badge-success">SELECT-Only Verified</span>
+                  <button id="btnCopySql" class="btn btn-secondary btn-sm">Copy SQL</button>
+                </div>
+              </div>
+              <div class="code-container" style="margin-bottom: 0;">
+                <div class="code-header">
+                  <span>POSTGRESQL / SQLITE STANDARD</span>
+                  <span id="queryExecTime">-- ms</span>
+                </div>
+                <div class="code-block" id="sqlDisplay"></div>
+              </div>
+            </div>
+
+            <!-- Results Data Grid -->
+            <div class="section-panel">
+              <div class="panel-header">
+                <span class="panel-title">Query Results</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <input type="text" id="tableSearch" class="query-input" style="padding: 4px 8px; font-size: 12px; width: 180px;" placeholder="Search in results..." />
+                  <button id="btnExportCsv" class="btn btn-secondary btn-sm">Export CSV</button>
+                </div>
+              </div>
+              <div class="panel-body" style="padding-top: 14px;">
+                <div class="table-meta-bar">
+                  <span class="table-stats" id="tableStats">0 rows returned</span>
+                  <span class="table-stats">Read-Only Transaction</span>
+                </div>
+                <div class="table-wrapper">
+                  <table class="data-table" id="dataTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                  </table>
+                </div>
+                <div class="pagination-bar" id="paginationBar">
+                  <span id="pageInfo">Showing 1 to 10 of 10</span>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" id="btnPrevPage" disabled>Previous</button>
+                    <button class="btn btn-secondary btn-sm" id="btnNextPage" disabled>Next</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Error Alert (If error occurs) -->
+          <div id="errorContainer" class="status-badge badge-error" style="display: none; padding: 12px; font-size: 13px; width: 100%; border-radius: var(--radius-sm); margin-bottom: 20px;">
+            <div id="errorMessage"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: QUERY HISTORY -->
+        <section class="view-panel" id="view-history">
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Session Query Audit Log</span>
+              <button id="btnClearHistory" class="btn btn-secondary btn-sm">Clear History</button>
+            </div>
+            <div class="panel-body">
+              <div class="history-list" id="historyList">
+                <div style="color: var(--text-muted); font-size: 13px;">No queries executed in this session yet.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: SCHEMA CATALOG -->
+        <section class="view-panel" id="view-schema">
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Relational Database Catalog (10 Tables)</span>
+              <span class="status-badge badge-success">Schema Synchronized</span>
+            </div>
+            <div class="panel-body">
+              <div class="schema-grid">
+                <div class="table-list" id="schemaTableList">
+                  <!-- Populated dynamically -->
+                </div>
+                <div class="schema-details" id="schemaDetails">
+                  <div style="color: var(--text-muted); font-size: 13px;">Select a table on the left to inspect columns, constraints, and foreign key definitions.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: BENCHMARK & EVALUATION -->
+        <section class="view-panel" id="view-benchmark">
+          <div class="section-panel">
+            <div class="panel-header">
+              <span class="panel-title">Automated Benchmark Test Suite</span>
+              <button id="btnRunBenchmark" class="btn btn-primary btn-sm">Execute Benchmark</button>
+            </div>
+            <div class="panel-body">
+              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                Evaluates query classification, ambiguity detection accuracy, intent resolution, and SQL execution across standard operational query categories.
+              </p>
+              <div id="benchmarkLoading" class="loading-inline" style="display: none;">
+                <div class="spinner"></div>
+                <span>Executing benchmark test suite...</span>
+              </div>
+              <div class="table-wrapper">
+                <table class="benchmark-table" id="benchmarkTable">
+                  <thead>
+                    <tr>
+                      <th>Query Category</th>
+                      <th class="text-right">Evaluated</th>
+                      <th class="text-right">Passed</th>
+                      <th class="text-right">Accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody id="benchmarkBody">
+                    <tr><td colspan="4" style="color: var(--text-muted);">Click "Execute Benchmark" to run the test suite.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
