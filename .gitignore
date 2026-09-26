@@ -1,6 +1,7 @@
 # Environment & Secrets
 .env
 .env.local
+backend/.env
 
 # Python cache & bytecode
 __pycache__/
@@ -12,11 +13,32 @@ env/
 venv/
 .venv/
 ENV/
+*.egg-info/
+dist/
+build/
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database & SQLite runtime
+backend/db.sqlite3
+database/app.db
+database/*.sqlite
+database/test_app.db
 
 # Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Static and media
+backend/staticfiles/
 
 # IDE & Editor files
 .vscode/
@@ -27,8 +49,3 @@ htmlcov/
 
 # Logs
 *.log
-
-# Runtime SQLite app database (never commit production/runtime tenant data)
-database/app.db
-database/*.sqlite
-

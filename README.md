@@ -1,209 +1,213 @@
-# QueryMind: Ambiguity-Aware Natural Language to SQL System
+# Text-to-SQL Platform
 
-> **An enterprise-grade Text-to-SQL pipeline with an Intelligent Clarification Engine, Multi-Layer Security Validation, and Read-Only Database Execution.**
-
----
-
-## 🌟 Why QueryMind?
-
-Most Text-to-SQL solutions blindly generate SQL from ambiguous user prompts, leading to incorrect business calculations, hallucinated schemas, or catastrophic execution mistakes.
-
-For example, when an executive asks:
-> *"Show me the best customers from last month."*
-
-Naive systems generate an arbitrary query based on one hidden assumption. In reality, **"best customers"** could mean:
-1. Customers with the **highest total spending** (`SUM(orders.total_amount)`)
-2. Customers with the **most orders placed** (`COUNT(orders.order_id)`)
-3. Customers with the **most website visits** (`COUNT(visits.visit_id)`)
-4. Customers with the **highest average order value** (`AVG(orders.total_amount)`)
-
-Each interpretation yields a completely different result. **QueryMind detects underspecified business concepts, requests targeted clarification with concrete options, resolves user intent, and generates validated, safe SQL.**
+An enterprise-grade, multi-tenant Natural Language to SQL Intelligence platform built with **Django REST Framework (Backend)** and **React + Vite (Frontend)**. It features intelligent ambiguity detection, interactive clarification resolution, AST security validation, and multi-dialect database execution.
 
 ---
 
-## 🏗️ Core Architecture & Pipeline
+## 📁 Project Structure
 
+```text
+text-to-sql-platform/
+│
+├── backend/
+│   ├── manage.py
+│   ├── requirements.txt
+│   ├── .env
+│   │
+│   ├── config/
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   ├── wsgi.py
+│   │   └── asgi.py
+│   │
+│   ├── accounts/
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   ├── urls.py
+│   │   ├── permissions.py
+│   │   └── tests.py
+│   │
+│   ├── organizations/
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   ├── urls.py
+│   │   └── permissions.py
+│   │
+│   ├── connections/
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   ├── services.py
+│   │   └── urls.py
+│   │
+│   ├── query_engine/
+│   │   ├── intent.py
+│   │   ├── ambiguity.py
+│   │   ├── clarification.py
+│   │   ├── sql_generator.py
+│   │   ├── sql_validator.py
+│   │   └── executor.py
+│   │
+│   ├── schema_engine/
+│   │   ├── introspector.py
+│   │   ├── models.py
+│   │   └── services.py
+│   │
+│   ├── history/
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   └── urls.py
+│   │
+│   └── ai/
+│       ├── gemini_client.py
+│       ├── prompts.py
+│       └── parser.py
+│
+├── frontend/
+│   ├── package.json
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── ClarificationModal.jsx
+│   │   │   ├── SqlViewer.jsx
+│   │   │   └── DataTable.jsx
+│   │   ├── pages/
+│   │   │   ├── Login.jsx
+│   │   │   ├── Signup.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── Connections.jsx
+│   │   │   ├── Schema.jsx
+│   │   │   ├── Query.jsx
+│   │   │   └── History.jsx
+│   │   ├── services/
+│   │   │   └── api.js
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── index.css
+│   ├── index.html
+│   └── vite.config.js
+│
+├── README.md
+└── .gitignore
 ```
-                 USER
-                   │
-                   ▼
-          Natural Language Query
-                   │
-                   ▼
-        ┌─────────────────────┐
-        │ Schema Retriever    │ (10-table business graph)
-        └──────────┬──────────┘
-                   │
-                   ▼
-        ┌─────────────────────┐
-        │ Ambiguity Engine    │ (7 business ambiguity categories)
-        └──────────┬──────────┘
-                   │
-             ┌─────┴─────┐
-             │           │
-          Clear       Ambiguous
-             │           │
-             │           ▼
-             │    Clarification Dialog
-             │           │
-             │           ▼
-             │     User Selection
-             │           │
-             └─────┬─────┘
-                   ▼
-          Resolved Intent Model
-                   │
-                   ▼
-          SQL Generation Engine (Gemini / Semantic Grounding)
-                   │
-                   ▼
-          SQL Validation Layer (AST Parsing, Table Whitelist, LIMIT cap)
-                   │
-                   ▼
-         Read-Only Database (PostgreSQL / SQLite fallback)
-                   │
-                   ▼
-         Result Explanation (Executive NL Summary & Data Visuals)
-```
 
 ---
 
-## 🗄️ Relational Database Schema (10 Tables)
+## 🚀 Quick Start Guide
 
-QueryMind comes pre-configured with a realistic 10-table enterprise database:
-
-1. **`customers`**: Customer profiles, email, phone, location (Mumbai, Delhi, London, etc.), segment (Enterprise, SMB, Retail), status.
-2. **`employees`**: Internal organization staff, salaries, roles, departments, manager hierarchy.
-3. **`sales_reps`**: Sales team territory mapping, annual revenue quotas, commission rates.
-4. **`products`**: Catalog items across Computers, Peripherals, Furniture, Networking, Software, cost prices and selling prices for profit calculations.
-5. **`orders`**: Gross invoice amounts, order dates, fulfillment tracking (Completed, Shipped, Processing, Cancelled).
-6. **`order_items`**: Line items with unit prices, quantity, discounts, and line totals.
-7. **`payments`**: Payment transactions, dates, methods (Credit Card, UPI, Bank Transfer, PayPal), status.
-8. **`visits`**: Web platform analytics tracking visitor sessions, page views, duration in seconds, traffic channels.
-9. **`shipments`**: Logistics tracking, carriers (Blue Dart, DHL, FedEx), tracking numbers, delivery dates.
-10. **`returns`**: RMA requests, return reasons, refund amounts, and status.
-
----
-
-## 🛡️ Security & Safe SQL Execution
-
-QueryMind enforces security in depth:
-1. **Strict SELECT-Only Enforcement**: Automatically rejects `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `TRUNCATE`, `GRANT`, `EXECUTE`, or chained semicolon attacks.
-2. **Table & Column Whitelisting**: Verifies all table identifiers against the authorized 10-table catalog before execution.
-3. **Automatic Row Limits**: Automatically applies or caps queries at `LIMIT 1000` to prevent memory exhaustion.
-4. **Read-Only Database User**: PostgreSQL script provided to configure the `text2sql_readonly` user with zero write permissions.
-5. **Execution Timeouts**: Enforced query timeouts to mitigate slow or runaway queries.
-
----
-
-## 🚀 Quickstart
-
-### 1. Installation
+### 1. Backend Setup (Django REST Framework)
 
 ```bash
-cd /Users/macbookpro/.gemini/antigravity-ide/scratch/querymind
+# Navigate to backend directory
+cd backend
+
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Run migrations
+python manage.py migrate
+
+# Seed demo workspace and sample database
+python manage.py seed_demo
+
+# Run the Django development server
+python manage.py runserver 8000
 ```
 
-### 2. Seed Database
-
-To seed the local database:
-```bash
-python database/generate_seed_data.py
-```
-*This produces `database/seed.sql` (for PostgreSQL) and initializes `database/company.db` (for SQLite instant local execution).*
-
-### 3. Run FastAPI Backend
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-Interactive Swagger API documentation will be available at:
-`http://localhost:8000/docs`
-
-### 4. Run Streamlit Interactive Frontend
-
-```bash
-streamlit run frontend/streamlit_app.py
-```
+> **Default Demo Credentials:**
+> - Email: `demo@example.com`
+> - Password: `Password123!`
 
 ---
 
-## 📊 Benchmark Evaluation & Accuracy
-
-To evaluate the system across clear, ambiguous, multi-table, complex, and security-adversarial queries:
+### 2. Frontend Setup (React + Vite)
 
 ```bash
-python tests/evaluate_benchmark.py
+# In a new terminal, navigate to frontend directory
+cd frontend
+
+# Install npm packages
+npm install
+
+# Start Vite development server
+npm run dev
 ```
 
-Example Benchmark Results:
-| Query Type | Evaluated | Correct | Accuracy |
-| :--- | :--- | :--- | :--- |
-| Simple | 3 | 3 | 100.0% |
-| Aggregation | 1 | 1 | 100.0% |
-| Multi-Table | 3 | 3 | 100.0% |
-| Ambiguous (Clarification) | 4 | 4 | 100.0% |
-| Complex | 1 | 1 | 100.0% |
-| Security Adversarial | 3 | 3 | 100.0% |
-| **TOTAL OVERALL** | **15** | **15** | **100.0%** |
+Open your browser at `http://localhost:5173`.
 
 ---
 
-## 🛠️ API Endpoints
+## ⚡ Core Architecture & Features
 
-### `POST /api/v1/query`
-Processes natural language queries or user clarification replies.
+### 1. Ambiguity Detection & Clarification Engine (`backend/query_engine/`)
+- **Deterministic Taxonomy**: Scans user questions across 6 business ambiguity dimensions:
+  - Metric ambiguity (e.g. *spending* vs *order count* vs *average order value*)
+  - Timeframe ambiguity (e.g. *last 7 days* vs *last 30 days* vs *calendar month*)
+  - Ranking & performance criteria
+  - Filter thresholds (e.g. *orders > $1,000* vs *> $5,000*)
+  - Entity definitions (e.g. *invoiced orders* vs *cash payments*)
+- **Interactive Multi-Turn Clarification**: When ambiguity is detected, the frontend presents a clarification modal with recommended options, eliminating LLM hallucinations.
 
-**Request (Initial Question):**
-```json
-{
-  "question": "Show me the best customers last month"
-}
+### 2. Dialect-Aware SQL Generation (`backend/query_engine/sql_generator.py`)
+- Synthesizes queries for **SQLite**, **PostgreSQL**, and **MySQL**.
+- Integrates with **Google Gemini 1.5** via `backend/ai/gemini_client.py`.
+- Includes a robust semantic fallback engine for 100% offline, zero-dependency testing.
+
+### 3. Enterprise Security Guardrails (`backend/query_engine/sql_validator.py`)
+- **Strict Read-Only Enforcement**: Blocks any destructive commands (`DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `TRUNCATE`, `CREATE`, `EXEC`).
+- **Stacked Query Prevention**: Enforces a single statement to defeat SQL injection attempts.
+- **Automatic Limit Protection**: Enforces safety limit ceilings (default 50, maximum 1,000 rows).
+- **Execution Timeout**: Protects database pool from hanging queries.
+
+### 4. Dynamic Schema Introspection (`backend/schema_engine/`)
+- Introspects tables, column types, primary keys, and foreign keys on demand using SQLAlchemy.
+- Provides live sample data preview for rapid database exploration.
+
+### 5. Multi-Tenant Database Connectivity (`backend/connections/`)
+- Encrypts database connection credentials with AES-128 via Fernet ciphers.
+- Supports PostgreSQL, MySQL, and embedded SQLite databases.
+- Includes connection testing and schema sync endpoints.
+
+### 6. Query Audit Trail & Metrics (`backend/history/`)
+- Records natural queries, generated SQL, execution latency (in ms), row counts, and error logs.
+- Enables 1-click query re-run and CSV export from the UI.
+
+---
+
+## 📡 API Endpoints Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/auth/login/` | `POST` | Authenticate user & return JWT tokens |
+| `/api/auth/register/` | `POST` | Create user & new organization workspace |
+| `/api/auth/me/` | `GET` | Get current authenticated user profile |
+| `/api/connections/` | `GET`, `POST` | List & create tenant database connections |
+| `/api/connections/<id>/test-existing/` | `POST` | Test connectivity to a saved database |
+| `/api/connections/<id>/sync-schema/` | `POST` | Introspect and cache database schema |
+| `/api/schema/<conn_id>/` | `GET` | Fetch schema tables, columns, and foreign keys |
+| `/api/schema/<conn_id>/tables/<name>/preview/` | `GET` | Preview sample records from a table |
+| `/api/query/process/` | `POST` | Check ambiguity and generate verified SQL |
+| `/api/query/execute/` | `POST` | Safely execute SQL and log to history |
+| `/api/query/explain/` | `POST` | Explain SQL logic in plain English |
+| `/api/history/` | `GET` | Query history audit trail with search & filters |
+| `/api/history/stats/` | `GET` | Aggregated dashboard performance metrics |
+
+---
+
+## 🧪 Testing
+
+Run backend tests:
+```bash
+python backend/manage.py test accounts
 ```
 
-**Response (Clarification Required):**
-```json
-{
-  "status": "clarification_required",
-  "session_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "question": "Show me the best customers last month",
-  "clarification": {
-    "category": "metric",
-    "term": "best customers",
-    "reason": "Multiple business definitions are possible (spending, order frequency, loyalty, or visits).",
-    "question": "How would you like to define 'best customers'?",
-    "options": [
-      "Highest total spending (SUM of orders)",
-      "Most orders placed (COUNT of orders)",
-      "Most website visits (COUNT of visits)",
-      "Highest average order value (AVG of orders)"
-    ]
-  }
-}
-```
-
-**Request (Clarification Reply):**
-```json
-{
-  "session_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "question": "Show me the best customers last month",
-  "selected_clarification": "Highest total spending (SUM of orders)"
-}
-```
-
-**Response (Validated & Executed):**
-```json
-{
-  "status": "success",
-  "generated_sql": "SELECT c.customer_id, c.customer_name, SUM(o.total_amount) AS total_spending...",
-  "validated": true,
-  "explanation": "Retrieved 5 records. The leading record is 'Apex Global Logistics' with total spending of ₹3,072,005.00.",
-  "data": {
-    "columns": ["customer_id", "customer_name", "total_spending", "total_orders"],
-    "rows": [[1, "Apex Global Logistics", 3072005.0, 3], ...],
-    "row_count": 5,
-    "execution_time_ms": 3.42
-  }
-}
+Test frontend production build:
+```bash
+cd frontend && npm run build
 ```
